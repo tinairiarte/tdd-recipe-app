@@ -1,0 +1,73 @@
+from django.test import TestCase
+from django.contrib.auth import get_user_model
+from django.urls import reverse
+
+from rest_framework.test import APIClient
+from rest_framework import status
+
+# To run
+# docker-compose run --rm app sh -c "python manage.py test user"
+
+CREATE_USER_URL = reverse('user:create')
+
+
+def create_user(**params):
+    return get_user_model().objects.create_user(**params)
+
+
+class PublicUserApiTests(TestCase):
+    def setUp(self):
+        self.client = APIClient()
+
+    def test_create_valid_user_success(self):
+        payload = {
+            'email': 'test@tina.be',
+            'password': 'tina_secret',
+            'name': 'No Supro'
+        }
+        res = self.client.post(CREATE_USER_URL, payload)
+
+        # We expect 200 response
+        self.assertEqual(res.status_code, status.HTTP_201_CREATED)
+
+        # We expect User object to be created
+        # **res.data is dict response
+        # it includes payload + _id
+        user = get_user_model().objects.get(**res.data)
+        self.assertIsNotNone(user)
+
+        # We expect a valid encrypted password is also created
+        self.assertTrue(user.check_password(payload['password']))
+        # We expect the password not be available through user object
+        self.assertNotIn('password', res.data)
+
+    def test_user_already_exists(self):
+        payload = {
+            'email': 'test@tina.be',
+            'password': 'tina_secret',
+            'name': 'No Supro'
+        }
+
+        # We expect User object to be created
+        create_user(**payload)
+
+        # We expect NO Identical User object to be created
+        res = self.client.post(CREATE_USER_URL, payload)
+        self.assertEqual(res.status_code, status.HTTP_400_BAD_REQUEST)
+
+    def test_password_too_short(self):
+        """ Password should be more than 5 characters """
+        payload = {
+            'email': 'test@tina.be',
+            'password': 'tina',
+            'name': 'No Supro'
+        }
+
+        # We expect NO short password User object to be created
+        res = self.client.post(CREATE_USER_URL, payload)
+        self.assertEqual(res.status_code, status.HTTP_400_BAD_REQUEST)
+
+        # We expect User not to be created
+        user_exists = get_user_model().objects.filter(
+            email=payload['email']).exists()
+        self.assertFalse(user_exists)
