@@ -9,6 +9,7 @@ from rest_framework import status
 # docker-compose run --rm app sh -c "python manage.py test user"
 
 CREATE_USER_URL = reverse('user:create')
+TOKEN_URL = reverse('user:token')
 
 
 def create_user(**params):
@@ -71,3 +72,67 @@ class PublicUserApiTests(TestCase):
         user_exists = get_user_model().objects.filter(
             email=payload['email']).exists()
         self.assertFalse(user_exists)
+
+    def test_create_token_for_user(self):
+        payload = {
+            'email': 'test@tina.be',
+            'password': 'tina',
+            'name': 'No Supro'
+        }
+
+        create_user(**payload)
+        res = self.client.post(TOKEN_URL, payload)
+
+        # assume 200 status code
+        self.assertEqual(res.status_code, status.HTTP_200_OK)
+        # asume token in response
+        self.assertIn('token', res.data)
+
+    def test_create_token_invalid_credentials(self):
+        payload = {
+            'email': 'test@tina.be',
+            'password': 'tina',
+            'name': 'No Supro'
+        }
+
+        incorrect_payload = {
+            'email': 'test@tina.be',
+            'password': 'wrong password',
+            'name': 'No Supro'
+        }
+
+        create_user(**payload)
+        res = self.client.post(TOKEN_URL, incorrect_payload)
+
+        # assume 200 status code
+        self.assertEqual(res.status_code, status.HTTP_400_BAD_REQUEST)
+        # asume token not in response
+        self.assertNotIn('token', res.data)
+
+    def test_no_token_if_no_user(self):
+        payload = {
+            'email': 'test@tina.be',
+            'password': 'tina',
+            'name': 'No Supro'
+        }
+
+        res = self.client.post(TOKEN_URL, payload)
+
+        # assume 200 status code
+        self.assertEqual(res.status_code, status.HTTP_400_BAD_REQUEST)
+        # asume token not in response
+        self.assertNotIn('token', res.data)
+
+    def test_no_token_if_missing_fields(self):
+        payload = {
+            'email': 'test@tina.be',
+            'password': '',
+            'name': 'No Supro'
+        }
+
+        res = self.client.post(TOKEN_URL, payload)
+
+        # assume 200 status code
+        self.assertEqual(res.status_code, status.HTTP_400_BAD_REQUEST)
+        # asume token not in response
+        self.assertNotIn('token', res.data)
